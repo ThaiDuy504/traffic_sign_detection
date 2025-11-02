@@ -53,6 +53,7 @@ traffic_sign_detection/
 ## 💻 Yêu Cầu Hệ Thống
 
 - Python >= 3.12
+- uv (Python package manager)
 - CUDA-compatible GPU (khuyến nghị cho tốc độ xử lý nhanh)
 - RAM >= 8GB
 - Disk space >= 2GB (cho model và dependencies)
