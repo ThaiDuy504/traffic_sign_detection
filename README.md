@@ -60,7 +60,26 @@ traffic_sign_detection/
 
 ## 🚀 Cài Đặt
 
-### 1. Clone Repository
+### 1. Cài Đặt uv (nếu chưa có)
+
+`uv` là một trình quản lý gói Python nhanh chóng. Nếu bạn chưa cài đặt, hãy sử dụng một trong các lệnh sau:
+
+**macOS và Linux:**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Windows (PowerShell):**
+```bash
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**Hoặc cài đặt qua pip:**
+```bash
+pip install uv
+```
+
+### 2. Clone Repository
 
 ```bash
 cd traffic_sign_detection
