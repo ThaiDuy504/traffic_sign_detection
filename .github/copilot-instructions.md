@@ -33,8 +33,8 @@ traffic_sign_detection/
 │   ├── yolo_module.py      # YOLO detection logic
 │   ├── pyproject.toml      # Backend dependencies
 │   └── .python-version     # Python version specification
-├── frontend/               # Frontend application
-│   ├── main.py            # Frontend entry point
+├── frontend/               # Frontend application (placeholder)
+│   ├── main.py            # Frontend placeholder
 │   └── pyproject.toml     # Frontend dependencies
 ├── notebook/              # Training notebooks
 │   └── train_yolo.ipynb   # YOLO training notebook
@@ -113,9 +113,11 @@ async def endpoint_name(
 ### Running the Backend
 ```bash
 cd backend
+# Recommended: Using uvicorn directly
 uv run uvicorn main:app --host 0.0.0.0 --port 8000
-# OR
-uv run main.py
+
+# Alternative: Using the main.py __main__ block
+python main.py
 ```
 
 ### Adding Dependencies
