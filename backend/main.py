@@ -1,4 +1,5 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from typing import Annotated
 from contextlib import asynccontextmanager
@@ -35,6 +36,15 @@ app = FastAPI(
     description="API for detecting traffic signs using YOLOv8",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+# Configure CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=False,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
 )
 
 
