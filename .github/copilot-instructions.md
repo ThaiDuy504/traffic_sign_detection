@@ -7,7 +7,9 @@ This is a Traffic Sign Detection system using YOLOv8 deep learning model with a 
 ## Tech Stack
 
 ### Backend
-- **Python**: >= 3.12 (3.13 for Docker)
+- **Python**: >= 3.12 for local development, 3.13 for Docker
+  - Local: Uses version specified in `backend/.python-version` (3.12)
+  - Docker: Uses `python:3.13-slim` base image for latest features
 - **FastAPI**: Modern web framework for building APIs (>= 0.120.4)
   - Includes Uvicorn ASGI server via `fastapi[standard]`
   - Built-in CORS middleware for cross-origin requests
@@ -579,7 +581,9 @@ docker-compose down
 
 - **Model Required**: The model file (`backend/model/best.pt`) must exist before building
 - **File Paths**: Frontend files are copied to `/app/frontend` in container
-- **Static Files**: FastAPI finds frontend at both `/app/backend/frontend` and `/app/frontend`
+- **Static Files**: FastAPI checks two paths for frontend files:
+  - First: `/app/backend/frontend` (local dev structure in Docker)
+  - Second: `/app/frontend` (used in current Docker setup)
 - **Security**: Container runs as non-root user (UID 1001)
 - **Port**: Application listens on port 8000 inside container
 
