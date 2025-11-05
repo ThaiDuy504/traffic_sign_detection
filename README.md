@@ -1,4 +1,4 @@
-[ ] # implement docker
+[x]  implement docker
 
 # 🚦 Hệ Thống Phát Hiện Biển Báo Giao Thông
 
