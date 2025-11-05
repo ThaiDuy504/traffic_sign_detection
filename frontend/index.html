@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vehicle Detection</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>🚗 Vehicle Detection</h1>
+        <p>Upload an image to detect vehicles and license plates</p>
+      </header>
+
+      <main>
+        <div class="left-panel">
+          <div class="upload-section" id="uploadSection">
+            <input
+              type="file"
+              id="fileInput"
+              accept="image/*"
+              style="display: none"
+            />
+            <div class="upload-icon">📤</div>
+            <div class="upload-text">Drop Image Here</div>
+            <div class="upload-subtext">- or -</div>
+            <div class="upload-subtext">Click to Upload</div>
+            <p class="file-name" id="fileName"></p>
+          </div>
+
+          <div class="controls">
+            <div class="control-group">
+              <label for="confSlider">
+                <span>Confidence Threshold</span>
+                <span id="confValue">0.25</span>
+              </label>
+              <input type="range" id="confSlider" min="0" max="1" step="0.05" value="0.25" />
+            </div>
+            <div class="control-group">
+              <label for="iouSlider">
+                <span>IoU Threshold</span>
+                <span id="iouValue">0.45</span>
+              </label>
+              <input type="range" id="iouSlider" min="0" max="1" step="0.05" value="0.45" />
+            </div>
+          </div>
+
+          <button id="processBtn" class="process-btn">Process</button>
+        </div>
+
+        <div class="results-container">
+          <div class="results-tabs">
+            <button class="tab-btn active" data-tab="image">Image</button>
+            <button class="tab-btn" data-tab="json">Json</button>
+          </div>
+          
+          <div class="tab-content">
+            <div class="tab-panel active" id="imageTab">
+              <div id="imageResult" class="image-placeholder">
+                Upload an image and click Process to see results
+              </div>
+            </div>
+            
+            <div class="tab-panel" id="jsonTab">
+              <div id="jsonResult" class="json-display">
+                <pre>No results yet</pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="loading" id="loading" style="display: none">
+            <div class="spinner"></div>
+            <p>Processing image...</p>
+          </div>
+
+          <div class="error" id="error" style="display: none"></div>
+        </div>
+      </main>
+    </div>
+
+    <script src="/static/script.js"></script>
+  </body>
+</html>
+

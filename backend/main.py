@@ -1,6 +1,7 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from typing import Annotated
 from contextlib import asynccontextmanager
 import io
@@ -47,10 +48,18 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
+# Mount static files (frontend)
+frontend_path = Path(__file__).parent.parent / "frontend"
+if frontend_path.exists():
+    app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")
+
 
 @app.get("/")
 async def root():
-    """Root endpoint to verify API is running"""
+    """Serve the frontend application"""
+    frontend_index = frontend_path / "index.html"
+    if frontend_index.exists():
+        return FileResponse(frontend_index)
     return {
         "message": "Traffic Sign Detection API",
         "status": "running",
