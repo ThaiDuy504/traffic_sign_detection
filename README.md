@@ -1,5 +1,3 @@
-[x]  implement docker
-
 # 🚦 Hệ Thống Phát Hiện Biển Báo Giao Thông
 
 Dự án phát hiện biển báo giao thông sử dụng YOLOv8 với FastAPI backend và giao diện người dùng.
@@ -12,6 +10,7 @@ Dự án phát hiện biển báo giao thông sử dụng YOLOv8 với FastAPI b
 -   [Yêu Cầu Hệ Thống](#yêu-cầu-hệ-thống)
 -   [Cài Đặt](#cài-đặt)
 -   [Sử Dụng](#sử-dụng)
+-   [Docker Deployment](#docker-deployment)
 -   [API Documentation](#api-documentation)
 -   [Huấn Luyện Model](#huấn-luyện-model)
 -   [Công Nghệ Sử Dụng](#công-nghệ-sử-dụng)
@@ -44,23 +43,22 @@ traffic_sign_detection/
 │   ├── main.py             # FastAPI application
 │   ├── yolo_module.py      # Module xử lý YOLO detection
 │   ├── pyproject.toml      # Dependencies cho backend
-│   └── .python-version     # Python version
+│   └── uv.lock            # Lock file cho dependencies
 ├── frontend/               # Web Frontend (HTML/CSS/JS)
 │   ├── index.html         # Frontend UI
 │   ├── style.css          # Styling
 │   ├── script.js          # Frontend logic
 │   └── README.md          # Frontend documentation
 ├── notebook/              # Training notebooks
-│   ├── train_yolo.ipynb   # Notebook huấn luyện YOLO
-│   └── yolo_dataset.zip   # Dataset cho training
-├── start_server.py        # Script khởi động server nhanh
+│   └── train_yolo.ipynb   # Notebook huấn luyện YOLO
+├── dockerfile             # Docker configuration
 └── README.md              # File này
 ```
 
 ## 💻 Yêu Cầu Hệ Thống
 
--   Python >= 3.12
--   uv (Python package manager)
+-   Python >= 3.13
+-   uv (Python package manager) hoặc Docker
 -   CUDA-compatible GPU (khuyến nghị cho tốc độ xử lý nhanh)
 -   RAM >= 8GB
 -   Disk space >= 2GB (cho model và dependencies)
@@ -89,12 +87,6 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 pip install uv
 ```
 
-### 2. Clone Repository
-
-```bash
-cd traffic_sign_detection
-```
-
 ### 2. Cài Đặt Backend
 
 ```bash
@@ -102,7 +94,6 @@ cd backend
 
 # Cài đặt dependencies bằng uv (khuyến nghị)
 uv sync
-
 ```
 
 **Dependencies Backend:**
@@ -123,25 +114,19 @@ backend/model/best.pt
 
 ## 🎮 Sử Dụng
 
-### Khởi Động Server (Khuyến Nghị)
-
-**Cách 1: Sử dụng script khởi động nhanh**
-
-```bash
-# Từ thư mục gốc dự án
-python start_server.py
-```
-
-**Cách 2: Khởi động thủ công**
+### Khởi Động Server
 
 ```bash
 cd backend
 
 # Chạy với uvicorn
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 # Hoặc chạy trực tiếp
 uv run main.py
+
+# Hoặc sử dụng python trực tiếp
+python main.py
 ```
 
 Server sẽ khởi động tại: `http://localhost:8000`
@@ -168,6 +153,28 @@ Response:
     "model_loaded": true
 }
 ```
+
+## 🐳 Docker Deployment
+
+### Build và Chạy Docker Container
+
+```bash
+# Build image
+docker build -t traffic-sign-detection .
+
+# Chạy container
+docker run -p 8000:8000 traffic-sign-detection
+```
+
+Server sẽ khởi động tại: `http://localhost:8000`
+
+**Lưu ý Docker:**
+
+-   Dockerfile sử dụng multi-stage build với Python 3.13-slim
+-   Dependencies được cài đặt qua uv trong build stage
+-   Runtime stage chỉ chứa những gì cần thiết để giảm image size
+-   Chạy với non-root user (appuser) để bảo mật tốt hơn
+-   Frontend được copy trực tiếp vào container
 
 ## 📡 API Documentation
 
@@ -281,9 +288,9 @@ cd notebook
 jupyter notebook train_yolo.ipynb
 ```
 
-2. Dataset được đóng gói trong `yolo_dataset.zip`
+2. Chuẩn bị dataset theo format YOLO (xem cấu trúc bên dưới)
 
-3. Giải nén dataset và cấu hình đường dẫn trong notebook
+3. Cấu hình đường dẫn dataset trong notebook
 
 4. Chạy các cell để huấn luyện model
 
