@@ -49,7 +49,10 @@ app.add_middleware(
 )
 
 # Mount static files (frontend)
-frontend_path = Path(__file__).parent.parent / "frontend"
+# Support both local dev and Docker paths
+frontend_path = Path(__file__).parent / "frontend"
+if not frontend_path.exists():
+    frontend_path = Path(__file__).parent.parent / "frontend"
 if frontend_path.exists():
     app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")
 

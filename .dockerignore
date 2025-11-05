@@ -1,0 +1,51 @@
+# Version Control
+.git/
+.gitignore
+.github/
+
+# IDE & Editors
+.cursor/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.so
+.Python
+
+# Virtual Environments
+**/.venv/
+**/venv*/
+**/env/
+**/ENV/
+
+# Development
+notebook/
+*.ipynb
+test_images/
+
+# Environment & Config
+.env
+.env.*
+
+# OS Files
+.DS_Store
+Thumbs.db
+*.log
+
+# Docker
+dockerfile
+.dockerignore
+backend/.dockerignore
+backend/.gitignore
+
+# Documentation (optional - remove if you want README in container)
+README.md
+frontend/README.md
