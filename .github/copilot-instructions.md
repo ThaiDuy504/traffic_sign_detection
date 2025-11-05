@@ -7,9 +7,10 @@ This is a Traffic Sign Detection system using YOLOv8 deep learning model with a 
 ## Tech Stack
 
 ### Backend
-- **Python**: >= 3.12 for local development, 3.13 for Docker
+- **Python**: >= 3.12 (application is compatible with 3.12+)
   - Local: Uses version specified in `backend/.python-version` (3.12)
-  - Docker: Uses `python:3.13-slim` base image for latest features
+  - Docker: Uses `python:3.13-slim` base image (newer version, still compatible)
+  - Note: Both 3.12 and 3.13 work; the difference is just the base image choice
 - **FastAPI**: Modern web framework for building APIs (>= 0.120.4)
   - Includes Uvicorn ASGI server via `fastapi[standard]`
   - Built-in CORS middleware for cross-origin requests
@@ -581,9 +582,10 @@ docker-compose down
 
 - **Model Required**: The model file (`backend/model/best.pt`) must exist before building
 - **File Paths**: Frontend files are copied to `/app/frontend` in container
-- **Static Files**: FastAPI checks two paths for frontend files:
-  - First: `/app/backend/frontend` (local dev structure in Docker)
-  - Second: `/app/frontend` (used in current Docker setup)
+- **Static Files**: FastAPI checks frontend paths in order (from main.py):
+  - First: `Path(__file__).parent / "frontend"` → `/app/backend/frontend` (doesn't exist in Docker)
+  - Fallback: `Path(__file__).parent.parent / "frontend"` → `/app/frontend` (used in Docker)
+  - The fallback path matches the Docker copy location, so frontend loads correctly
 - **Security**: Container runs as non-root user (UID 1001)
 - **Port**: Application listens on port 8000 inside container
 
@@ -627,14 +629,20 @@ if ext not in allowed_extensions:
 ### Resource Limits
 
 ```python
-# Limit file size (in bytes)
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+# Limit file size using Content-Length header (efficient)
+from fastapi import Request
 
-file_size = 0
-async for chunk in file.file:
-    file_size += len(chunk)
-    if file_size > MAX_FILE_SIZE:
-        raise HTTPException(400, detail="File too large")
+@app.post("/upload")
+async def upload_file(request: Request, file: UploadFile):
+    # Check Content-Length header before reading
+    content_length = request.headers.get('content-length')
+    if content_length:
+        MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+        if int(content_length) > MAX_FILE_SIZE:
+            raise HTTPException(400, detail="File too large")
+    
+    # Proceed with file processing
+    image_bytes = await file.read()
 ```
 
 ### CORS Configuration
@@ -932,12 +940,19 @@ Solutions:
 #### Frontend Not Loading
 ```
 Issue: GET / returns JSON instead of HTML
-Cause: Frontend path not found
-Solution: Ensure frontend/ directory exists at:
-- /app/backend/frontend (Docker)
-- /app/frontend (Docker fallback)
-- backend/frontend (local dev)
-- frontend/ (local dev fallback)
+Cause: Frontend path not found by FastAPI
+
+Solution: Ensure frontend directory exists at correct location:
+
+Docker Container (WORKDIR=/app/backend):
+  - Checks: /app/backend/frontend (relative to WORKDIR)
+  - Fallback: /app/frontend (parent dir, used in current Docker setup)
+  - Frontend copied to: /app/frontend (see Dockerfile line 44)
+  
+Local Development:
+  - Checks: backend/frontend (if running from backend/)
+  - Fallback: ../frontend (if running from backend/, finds frontend/)
+  - Or just ensure frontend/ exists next to backend/
 ```
 
 ## CI/CD Considerations
