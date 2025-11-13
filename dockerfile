@@ -45,6 +45,8 @@ COPY --chown=appuser:appgroup frontend ./frontend
 
 USER appuser
 
+EXPOSE 8000
+
 # Change to backend directory so relative paths work
 WORKDIR /app/backend
 

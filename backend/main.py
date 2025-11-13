@@ -7,20 +7,25 @@ from contextlib import asynccontextmanager
 import io
 import tempfile
 from pathlib import Path
-from yolo_module import load_model, detect_with_annotated_image
+from yolo_module import load_model, detect_with_annotated_image, load_class_mapping
 
 # Global model variable
 model = None
+class_mapping = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load the YOLO model when the application starts and cleanup on shutdown"""
-    global model
+    global model, class_mapping
     # Startup
     try:
         model = load_model("model/best.pt")
         print("✓ Model loaded successfully")
+        
+        # Load class mapping
+        class_mapping = load_class_mapping("class_mapping.txt")
+        print(f"✓ Class mapping loaded: {len(class_mapping)} classes")
     except Exception as e:
         print(f"✗ Error loading model: {e}")
         raise
@@ -122,7 +127,7 @@ async def detect_traffic_signs(
 
         # Perform detection using the temporary file path
         detection_results, _ = detect_with_annotated_image(
-            model=model, source=temp_file_path, conf=conf, iou=iou, image_format="JPEG"
+            model=model, source=temp_file_path, conf=conf, iou=iou, image_format="JPEG", class_mapping=class_mapping
         )
 
         return {
@@ -189,7 +194,7 @@ async def detect_with_image(
 
         # Perform detection using the temporary file path
         _, annotated_image_bytes = detect_with_annotated_image(
-            model=model, source=temp_file_path, conf=conf, iou=iou, image_format="JPEG"
+            model=model, source=temp_file_path, conf=conf, iou=iou, image_format="JPEG", class_mapping=class_mapping
         )
 
         # Return the annotated image

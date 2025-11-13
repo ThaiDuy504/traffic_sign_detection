@@ -316,6 +316,14 @@ main {
   color: #e4e6eb;
 }
 
+.detection-key {
+  font-size: 0.75rem;
+  color: #8be9fd;
+  font-family: 'Courier New', monospace;
+  margin-bottom: 8px;
+  opacity: 0.8;
+}
+
 .detection-confidence {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
