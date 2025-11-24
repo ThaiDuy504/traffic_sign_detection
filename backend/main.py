@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -6,8 +6,11 @@ from typing import Annotated
 from contextlib import asynccontextmanager
 import io
 import tempfile
+import os
+import cv2
+import numpy as np
 from pathlib import Path
-from yolo_module import load_model, detect_with_annotated_image, load_class_mapping
+from yolo_module import load_model, detect_with_annotated_image, load_class_mapping, process_video
 
 # Global model variable
 model = None
@@ -216,6 +219,111 @@ async def detect_with_image(
                 Path(temp_file_path).unlink(missing_ok=True)
             except Exception:
                 pass
+
+
+@app.post("/detect/video")
+async def detect_video(
+    file: Annotated[
+        UploadFile, File(description="Video file for traffic sign detection")
+    ],
+    background_tasks: BackgroundTasks,
+    conf: float = 0.25,
+    iou: float = 0.45,
+):
+    """
+    Detect traffic signs in an uploaded video.
+    """
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+
+    # Validate file type
+    if not file.content_type or not file.content_type.startswith("video/"):
+        raise HTTPException(
+            status_code=400, detail=f"File must be a video. Got: {file.content_type}"
+        )
+
+    temp_file_path = None
+    processed_path = None
+    try:
+        # Create temporary file for input video
+        file_extension = Path(file.filename or "video.mp4").suffix or ".mp4"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
+            temp_file.write(await file.read())
+            temp_file_path = temp_file.name
+
+        # Process video
+        processed_path = process_video(
+            model=model, source_path=temp_file_path, conf=conf, iou=iou
+        )
+
+        # Clean up input file immediately
+        Path(temp_file_path).unlink(missing_ok=True)
+        temp_file_path = None
+
+        # Schedule cleanup of processed file
+        background_tasks.add_task(os.unlink, processed_path)
+
+        return FileResponse(
+            processed_path, 
+            media_type="video/mp4", 
+            filename=f"annotated_{file.filename}"
+        )
+
+    except Exception as e:
+        # Clean up on error
+        if temp_file_path and Path(temp_file_path).exists():
+            Path(temp_file_path).unlink(missing_ok=True)
+        if processed_path and Path(processed_path).exists():
+            Path(processed_path).unlink(missing_ok=True)
+            
+        raise HTTPException(status_code=500, detail=f"Video processing failed: {str(e)}")
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    
+    if model is None:
+        await websocket.close(code=1011, reason="Model not loaded")
+        return
+
+    try:
+        # Extract query parameters manually since FastAPI doesn't inject them for WebSockets
+        query_params = websocket.query_params
+        conf = float(query_params.get("conf", 0.25))
+        iou = float(query_params.get("iou", 0.45))
+        
+        while True:
+            data = await websocket.receive_bytes()
+            
+            # Convert bytes to numpy array
+            nparr = np.frombuffer(data, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            if img is None:
+                continue
+                
+            # Detect and get annotated image
+            # We pass the numpy array directly
+            _, annotated_bytes = detect_with_annotated_image(
+                model=model, 
+                source=img, 
+                conf=conf, 
+                iou=iou, 
+                image_format="JPEG",
+                class_mapping=class_mapping
+            )
+            
+            await websocket.send_bytes(annotated_bytes)
+            
+    except WebSocketDisconnect:
+        print("Client disconnected")
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
 
 
 if __name__ == "__main__":

@@ -12,20 +12,56 @@
   <div class="container">
     <header>
       <h1>🚦 Traffic Sign Detection</h1>
-      <p>Upload an image to detect traffic signs</p>
+      <p>Detect traffic signs in images, videos, or real-time camera stream</p>
     </header>
 
     <main>
       <div class="left-panel">
-        <div class="upload-section" id="uploadSection">
-          <input type="file" id="fileInput" accept="image/*" style="display: none" />
-          <div class="upload-icon">📤</div>
-          <div class="upload-text">Drop Image Here</div>
-          <div class="upload-subtext">- or -</div>
-          <div class="upload-subtext">Click to Upload</div>
-          <p class="file-name" id="fileName"></p>
+        <!-- Input Mode Tabs -->
+        <div class="input-tabs">
+          <button class="input-tab active" data-mode="image">Image</button>
+          <button class="input-tab" data-mode="video">Video</button>
+          <button class="input-tab" data-mode="camera">Camera</button>
         </div>
 
+        <!-- Image Input Panel -->
+        <div class="input-panel active" id="imageInputPanel">
+          <div class="upload-section" id="imageUploadSection">
+            <input type="file" id="imageInput" accept="image/*" style="display: none" />
+            <div class="upload-icon">🖼️</div>
+            <div class="upload-text">Drop Image Here</div>
+            <div class="upload-subtext">- or -</div>
+            <div class="upload-subtext">Click to Upload</div>
+            <p class="file-name" id="imageFileName"></p>
+          </div>
+          <button id="processImageBtn" class="process-btn">Process Image</button>
+        </div>
+
+        <!-- Video Input Panel -->
+        <div class="input-panel" id="videoInputPanel">
+          <div class="upload-section" id="videoUploadSection">
+            <input type="file" id="videoInput" accept="video/*" style="display: none" />
+            <div class="upload-icon">🎬</div>
+            <div class="upload-text">Drop Video Here</div>
+            <div class="upload-subtext">- or -</div>
+            <div class="upload-subtext">Click to Upload</div>
+            <p class="file-name" id="videoFileName"></p>
+          </div>
+          <button id="processVideoBtn" class="process-btn">Process Video</button>
+        </div>
+
+        <!-- Camera Input Panel -->
+        <div class="input-panel" id="cameraInputPanel">
+          <div class="upload-section" style="cursor: default; border-style: solid;">
+            <div class="upload-icon">📷</div>
+            <div class="upload-text">Live Camera Detection</div>
+            <p style="color: #b0b3b8; margin-bottom: 20px;">Stream your camera to detect signs in real-time</p>
+          </div>
+          <button id="startCameraBtn" class="process-btn">Start Camera</button>
+          <button id="stopCameraBtn" class="process-btn stop-btn hidden">Stop Camera</button>
+        </div>
+
+        <!-- Shared Controls -->
         <div class="controls">
           <div class="control-group">
             <label for="confSlider">
@@ -42,20 +78,18 @@
             <input type="range" id="iouSlider" min="0" max="1" step="0.05" value="0.45" />
           </div>
         </div>
-
-        <button id="processBtn" class="process-btn">Process</button>
       </div>
 
       <div class="results-container">
         <div class="results-tabs">
-          <button class="tab-btn active" data-tab="image">Image</button>
-          <button class="tab-btn" data-tab="json">Json</button>
+          <button class="tab-btn active" data-tab="visual">Visual</button>
+          <button class="tab-btn" data-tab="json">Details</button>
         </div>
 
         <div class="tab-content">
-          <div class="tab-panel active" id="imageTab">
-            <div id="imageResult" class="image-placeholder">
-              Upload an image and click Process to see results
+          <div class="tab-panel active" id="visualTab">
+            <div id="visualResult" class="image-placeholder">
+              Select a mode and start processing
             </div>
           </div>
 
@@ -68,7 +102,7 @@
 
         <div class="loading" id="loading" style="display: none">
           <div class="spinner"></div>
-          <p>Processing image...</p>
+          <p>Processing...</p>
         </div>
 
         <div class="error" id="error" style="display: none"></div>

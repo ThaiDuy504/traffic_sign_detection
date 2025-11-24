@@ -3,6 +3,9 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 import io
+import cv2
+import tempfile
+import os
 
 
 def load_class_mapping(mapping_path: str = "class_mapping.txt") -> dict[str, str]:
@@ -136,3 +139,67 @@ def detect_with_annotated_image(
             detection_results.append(detection)
 
     return detection_results, annotated_image_bytes
+
+
+def process_video(
+    model: YOLO,
+    source_path: str,
+    conf: float = 0.25,
+    iou: float = 0.45,
+) -> str:
+    """
+    Process a video file frame by frame, detecting objects and saving the annotated video.
+    
+    Args:
+        model: Pre-loaded YOLO model instance
+        source_path: Path to the input video file
+        conf: Confidence threshold
+        iou: NMS IoU threshold
+        
+    Returns:
+        Path to the processed video file
+    """
+    cap = cv2.VideoCapture(source_path)
+    if not cap.isOpened():
+        raise ValueError("Could not open video file")
+
+    # Get video properties
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    
+    if fps <= 0:
+        fps = 30  # Fallback FPS
+    
+    # Create output temporary file
+    output_fd, output_path = tempfile.mkstemp(suffix='.mp4')
+    os.close(output_fd)
+    
+    # Initialize video writer
+    # 'mp4v' is widely supported
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v') # type: ignore
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    
+    if not out.isOpened():
+        cap.release()
+        raise ValueError("Could not open video writer")
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+            
+        # Run detection on the frame
+        results = model.predict(frame, conf=conf, iou=iou, verbose=False)
+        result = results[0]
+        
+        # Plot results on frame (returns BGR numpy array)
+        annotated_frame = result.plot()
+        
+        # Write frame
+        out.write(annotated_frame)
+        
+    cap.release()
+    out.release()
+    
+    return output_path

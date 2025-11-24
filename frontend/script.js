@@ -1,223 +1,442 @@
 const API_BASE_URL = "http://localhost:8000";
+const WS_BASE_URL = "ws://localhost:8000";
 
-const fileInput = document.getElementById("fileInput");
-const uploadSection = document.getElementById("uploadSection");
-const fileName = document.getElementById("fileName");
-const confSlider = document.getElementById("confSlider");
-const iouSlider = document.getElementById("iouSlider");
-const confValue = document.getElementById("confValue");
-const iouValue = document.getElementById("iouValue");
-const processBtn = document.getElementById("processBtn");
-const loading = document.getElementById("loading");
-const errorDiv = document.getElementById("error");
-const imageResult = document.getElementById("imageResult");
-const jsonResult = document.getElementById("jsonResult");
+// State
+let currentMode = "image";
+let selectedImageFile = null;
+let selectedVideoFile = null;
+let cameraStream = null;
+let socket = null;
+let isCameraRunning = false;
 
-let selectedFile = null;
-let lastDetectionData = null;
+// DOM Elements
+const els = {
+    // Mode Tabs
+    modeTabs: document.querySelectorAll(".input-tab"),
+    inputPanels: {
+        image: document.getElementById("imageInputPanel"),
+        video: document.getElementById("videoInputPanel"),
+        camera: document.getElementById("cameraInputPanel"),
+    },
 
-// Tab switching
-document.querySelectorAll(".tab-btn").forEach((btn) => {
+    // Image Input
+    imageInput: document.getElementById("imageInput"),
+    imageUploadSection: document.getElementById("imageUploadSection"),
+    imageFileName: document.getElementById("imageFileName"),
+    processImageBtn: document.getElementById("processImageBtn"),
+
+    // Video Input
+    videoInput: document.getElementById("videoInput"),
+    videoUploadSection: document.getElementById("videoUploadSection"),
+    videoFileName: document.getElementById("videoFileName"),
+    processVideoBtn: document.getElementById("processVideoBtn"),
+
+    // Camera Input
+    startCameraBtn: document.getElementById("startCameraBtn"),
+    stopCameraBtn: document.getElementById("stopCameraBtn"),
+
+    // Controls
+    confSlider: document.getElementById("confSlider"),
+    iouSlider: document.getElementById("iouSlider"),
+    confValue: document.getElementById("confValue"),
+    iouValue: document.getElementById("iouValue"),
+
+    // Results
+    resultTabs: document.querySelectorAll(".tab-btn"),
+    resultPanels: {
+        visual: document.getElementById("visualTab"),
+        json: document.getElementById("jsonTab"),
+    },
+    visualResult: document.getElementById("visualResult"),
+    jsonResult: document.getElementById("jsonResult"),
+    loading: document.getElementById("loading"),
+    error: document.getElementById("error"),
+};
+
+// --- Initialization ---
+
+// Mode Tab Switching
+els.modeTabs.forEach((btn) => {
     btn.addEventListener("click", () => {
-        const tabName = btn.dataset.tab;
+        const mode = btn.dataset.mode;
+        currentMode = mode;
 
-        // Update active tab button
-        document
-            .querySelectorAll(".tab-btn")
-            .forEach((b) => b.classList.remove("active"));
+        // Update tabs
+        els.modeTabs.forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
 
-        // Update active tab panel
-        document
-            .querySelectorAll(".tab-panel")
-            .forEach((panel) => panel.classList.remove("active"));
-        document.getElementById(tabName + "Tab").classList.add("active");
+        // Update panels
+        Object.values(els.inputPanels).forEach((p) =>
+            p.classList.remove("active")
+        );
+        els.inputPanels[mode].classList.add("active");
+
+        // Reset results area
+        if (!isCameraRunning) {
+            els.visualResult.innerHTML =
+                '<div class="image-placeholder">Select a mode and start processing</div>';
+            els.jsonResult.innerHTML = "<pre>No results yet</pre>";
+        }
+
+        // Stop camera if switching away from camera mode
+        if (mode !== "camera" && isCameraRunning) {
+            stopCamera();
+        }
     });
 });
 
-// Update slider values
-confSlider.addEventListener("input", (e) => {
-    confValue.textContent = e.target.value;
+// Result Tab Switching
+els.resultTabs.forEach((btn) => {
+    btn.addEventListener("click", () => {
+        const tab = btn.dataset.tab; // 'visual' or 'json'
+
+        els.resultTabs.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+
+        document
+            .querySelectorAll(".tab-panel")
+            .forEach((p) => p.classList.remove("active"));
+        document.getElementById(tab + "Tab").classList.add("active");
+    });
 });
 
-iouSlider.addEventListener("input", (e) => {
-    iouValue.textContent = e.target.value;
-});
+// Slider Updates
+els.confSlider.addEventListener(
+    "input",
+    (e) => (els.confValue.textContent = e.target.value)
+);
+els.iouSlider.addEventListener(
+    "input",
+    (e) => (els.iouValue.textContent = e.target.value)
+);
 
-// Upload section click
-uploadSection.addEventListener("click", () => fileInput.click());
+// --- Image Logic ---
 
-// File input change
-fileInput.addEventListener("change", (e) => {
-    const file = e.target.files[0];
-    if (file) {
-        handleFileSelect(file);
-    }
-});
-
-// Drag and drop
-uploadSection.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    uploadSection.classList.add("drag-over");
-});
-
-uploadSection.addEventListener("dragleave", () => {
-    uploadSection.classList.remove("drag-over");
-});
-
-uploadSection.addEventListener("drop", (e) => {
-    e.preventDefault();
-    uploadSection.classList.remove("drag-over");
-
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith("image/")) {
-        handleFileSelect(file);
-    }
-});
-
-// Handle file selection
-function handleFileSelect(file) {
-    selectedFile = file;
-    fileName.textContent = file.name;
-
-    // Show preview in upload section
+setupFileUpload(els.imageUploadSection, els.imageInput, (file) => {
+    selectedImageFile = file;
+    els.imageFileName.textContent = file.name;
+    // Preview
     const reader = new FileReader();
     reader.onload = (e) => {
-        uploadSection.style.backgroundImage = `url(${e.target.result})`;
-        uploadSection.style.backgroundSize = "cover";
-        uploadSection.style.backgroundPosition = "center";
-        uploadSection.querySelector(".upload-icon").style.display = "none";
-        uploadSection.querySelector(".upload-text").style.display = "none";
-        uploadSection
-            .querySelectorAll(".upload-subtext")
-            .forEach((el) => (el.style.display = "none"));
+        els.imageUploadSection.style.backgroundImage = `url(${e.target.result})`;
+        els.imageUploadSection.style.backgroundSize = "cover";
+        els.imageUploadSection.style.backgroundPosition = "center";
+        hideUploadText(els.imageUploadSection);
     };
     reader.readAsDataURL(file);
-}
-
-// Process button click
-processBtn.addEventListener("click", () => {
-    if (selectedFile) {
-        processImage();
-    } else {
-        showError("Please select an image first");
-    }
 });
 
-async function processImage() {
-    if (!selectedFile) return;
+els.processImageBtn.addEventListener("click", async () => {
+    if (!selectedImageFile) {
+        showError("Please select an image first");
+        return;
+    }
 
-    // Show loading
-    loading.style.display = "flex";
-    errorDiv.style.display = "none";
-    imageResult.innerHTML =
-        '<div class="image-placeholder">Processing...</div>';
-    jsonResult.innerHTML = "<pre>Processing...</pre>";
+    setLoading(true, "Processing image...");
 
     try {
-        const formData = new FormData();
-        formData.append("file", selectedFile);
+        const formData1 = new FormData();
+        formData1.append("file", selectedImageFile);
 
-        const conf = parseFloat(confSlider.value);
-        const iou = parseFloat(iouSlider.value);
+        const formData2 = new FormData();
+        formData2.append("file", selectedImageFile);
 
-        // Get detection results
-        const [detectionResponse, imageResponse] = await Promise.all([
+        const conf = els.confSlider.value;
+        const iou = els.iouSlider.value;
+
+        // Parallel fetch: detection data + annotated image
+        const [detectRes, imgRes] = await Promise.all([
             fetch(`${API_BASE_URL}/detect?conf=${conf}&iou=${iou}`, {
                 method: "POST",
-                body: formData,
+                body: formData1,
             }),
             fetch(`${API_BASE_URL}/detect/image?conf=${conf}&iou=${iou}`, {
                 method: "POST",
-                body: formData,
+                body: formData2,
             }),
         ]);
 
-        if (!detectionResponse.ok) {
-            const errorData = await detectionResponse.json();
-            throw new Error(errorData.detail || "Detection failed");
+        if (!detectRes.ok)
+            throw new Error(
+                (await detectRes.json()).detail || "Detection failed"
+            );
+        if (!imgRes.ok) throw new Error("Failed to get image");
+
+        const data = await detectRes.json();
+        const blob = await imgRes.blob();
+        const url = URL.createObjectURL(blob);
+
+        displayVisualResult(
+            `<img src="${url}" class="image-display" alt="Result" />`
+        );
+        displayJsonResult(data);
+    } catch (err) {
+        showError(err.message);
+    } finally {
+        setLoading(false);
+    }
+});
+
+// --- Video Logic ---
+
+setupFileUpload(els.videoUploadSection, els.videoInput, (file) => {
+    selectedVideoFile = file;
+    els.videoFileName.textContent = file.name;
+    // For video preview we might need more logic, or just show icon
+    els.videoUploadSection.style.backgroundImage = "none";
+    hideUploadText(els.videoUploadSection);
+    els.videoUploadSection.querySelector(".upload-icon").style.display =
+        "block"; // Keep icon
+    els.videoUploadSection.querySelector(".upload-text").textContent =
+        "Video Selected";
+    els.videoUploadSection.querySelector(".upload-text").style.display =
+        "block";
+});
+
+els.processVideoBtn.addEventListener("click", async () => {
+    if (!selectedVideoFile) {
+        showError("Please select a video first");
+        return;
+    }
+
+    setLoading(true, "Processing video... (This may take a while)");
+
+    try {
+        const formData = new FormData();
+        formData.append("file", selectedVideoFile);
+        const conf = els.confSlider.value;
+        const iou = els.iouSlider.value;
+
+        const response = await fetch(
+            `${API_BASE_URL}/detect/video?conf=${conf}&iou=${iou}`,
+            {
+                method: "POST",
+                body: formData,
+            }
+        );
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || "Video processing failed");
         }
 
-        if (!imageResponse.ok) {
-            throw new Error("Failed to get annotated image");
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+
+        displayVisualResult(`
+            <video controls autoplay loop class="video-display">
+                <source src="${url}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        `);
+
+        displayJsonResult({
+            message: "Video processed successfully",
+            filename: selectedVideoFile.name,
+        });
+    } catch (err) {
+        showError(err.message);
+    } finally {
+        setLoading(false);
+    }
+});
+
+// --- Camera Logic ---
+
+els.startCameraBtn.addEventListener("click", startCamera);
+els.stopCameraBtn.addEventListener("click", stopCamera);
+
+async function startCamera() {
+    try {
+        els.startCameraBtn.classList.add("hidden");
+        els.stopCameraBtn.classList.remove("hidden");
+
+        // Get camera stream
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 640 }, height: { ideal: 480 } },
+        });
+        cameraStream = stream;
+
+        // Setup hidden processing elements
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        video.play();
+        video.muted = true;
+
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        // Setup WebSocket
+        const conf = els.confSlider.value;
+        const iou = els.iouSlider.value;
+        socket = new WebSocket(`${WS_BASE_URL}/ws?conf=${conf}&iou=${iou}`);
+
+        let lastUrl = null;
+        let isProcessing = false; // Track if we're waiting for a response
+
+        socket.onopen = () => {
+            isCameraRunning = true;
+            // Switch visual tab to active
+            els.visualResult.innerHTML =
+                '<div class="image-placeholder">Connecting to server...</div>';
+            processFrame();
+        };
+
+        socket.onmessage = (event) => {
+            if (!isCameraRunning) return;
+
+            isProcessing = false; // Response received, ready for next frame
+
+            // Revoke previous URL to prevent memory leak
+            if (lastUrl) {
+                URL.revokeObjectURL(lastUrl);
+            }
+
+            const url = URL.createObjectURL(event.data);
+            lastUrl = url;
+
+            // Update UI efficiently
+            // Check if we already have an img tag
+            let img = els.visualResult.querySelector("img.camera-stream");
+            if (!img) {
+                els.visualResult.innerHTML = `<img class="image-display camera-stream" src="${url}" style="display: block;" />`;
+            } else {
+                img.src = url;
+                img.style.display = "block";
+            }
+
+            // Request next frame only after we've displayed this one
+            requestAnimationFrame(processFrame);
+        };
+
+        socket.onerror = (error) => {
+            console.error("WebSocket error", error);
+            showError("WebSocket connection error");
+            stopCamera();
+        };
+
+        socket.onclose = () => {
+            if (isCameraRunning) stopCamera();
+        };
+
+        function processFrame() {
+            if (!isCameraRunning || socket.readyState !== WebSocket.OPEN)
+                return;
+
+            // Skip if we're still waiting for previous frame to be processed
+            if (isProcessing) {
+                requestAnimationFrame(processFrame);
+                return;
+            }
+
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                // Reduce resolution for faster processing
+                const scaleFactor = 0.5; // Send at 50% resolution
+                canvas.width = video.videoWidth * scaleFactor;
+                canvas.height = video.videoHeight * scaleFactor;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                isProcessing = true; // Mark as processing
+
+                canvas.toBlob(
+                    (blob) => {
+                        if (blob && socket.readyState === WebSocket.OPEN) {
+                            socket.send(blob);
+                        } else {
+                            isProcessing = false; // Reset if send failed
+                        }
+                    },
+                    "image/jpeg",
+                    0.5 // Lower quality for faster transfer
+                );
+            } else {
+                requestAnimationFrame(processFrame);
+            }
         }
 
-        const detectionData = await detectionResponse.json();
-        const imageBlob = await imageResponse.blob();
-        const imageUrl = URL.createObjectURL(imageBlob);
-
-        lastDetectionData = detectionData;
-
-        // Display results
-        displayImageResult(imageUrl, detectionData);
-        displayJsonResult(detectionData);
-
-        loading.style.display = "none";
-    } catch (error) {
-        loading.style.display = "none";
-        showError(error.message);
+        displayJsonResult({ status: "Camera streaming started" });
+    } catch (err) {
+        showError("Camera error: " + err.message);
+        stopCamera();
     }
 }
 
-function displayImageResult(imageUrl, data) {
-    imageResult.innerHTML = `<img src="${imageUrl}" alt="Detection Result" class="image-display" />`;
+function stopCamera() {
+    isCameraRunning = false;
+
+    if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+        cameraStream = null;
+    }
+
+    if (socket) {
+        socket.close();
+        socket = null;
+    }
+
+    els.startCameraBtn.classList.remove("hidden");
+    els.stopCameraBtn.classList.add("hidden");
+}
+
+// --- Helper Functions ---
+
+function setupFileUpload(section, input, onSelect) {
+    section.addEventListener("click", () => input.click());
+
+    input.addEventListener("change", (e) => {
+        if (e.target.files[0]) onSelect(e.target.files[0]);
+    });
+
+    section.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        section.classList.add("drag-over");
+    });
+
+    section.addEventListener("dragleave", () => {
+        section.classList.remove("drag-over");
+    });
+
+    section.addEventListener("drop", (e) => {
+        e.preventDefault();
+        section.classList.remove("drag-over");
+        if (e.dataTransfer.files[0]) onSelect(e.dataTransfer.files[0]);
+    });
+}
+
+function hideUploadText(section) {
+    section.querySelector(".upload-icon").style.display = "none";
+    section.querySelector(".upload-text").style.display = "none";
+    section
+        .querySelectorAll(".upload-subtext")
+        .forEach((el) => (el.style.display = "none"));
+}
+
+function setLoading(isLoading, text = "Processing...") {
+    if (isLoading) {
+        els.loading.style.display = "flex";
+        els.loading.querySelector("p").textContent = text;
+        els.error.style.display = "none";
+        els.visualResult.style.opacity = "0.5";
+    } else {
+        els.loading.style.display = "none";
+        els.visualResult.style.opacity = "1";
+    }
+}
+
+function showError(msg) {
+    els.error.style.display = "block";
+    els.error.textContent = "Error: " + msg;
+    setTimeout(() => (els.error.style.display = "none"), 5000);
+}
+
+function displayVisualResult(html) {
+    els.visualResult.innerHTML = html;
 }
 
 function displayJsonResult(data) {
-    const detections = data.detections || [];
-    const count = data.detection_count || 0;
-
-    // Show detection list
-    let html = `<div class="detections-summary">Detected ${count} object${
-        count !== 1 ? "s" : ""
-    }</div>`;
-
-    if (count > 0) {
-        html += '<div class="detections-list">';
-
-        detections.forEach((detection) => {
-            const confidence = (detection.confidence * 100).toFixed(1);
-            const bbox = detection.bbox;
-
-            // Use Vietnamese class_name if available, otherwise use class key
-            const displayName = detection.class_name || detection.class;
-            const classKey = detection.class;
-
-            html += `
-        <div class="detection-item">
-          <div class="detection-header">
-            <span class="detection-class">#${
-                detection.index
-            } ${displayName}</span>
-            <span class="detection-confidence">${confidence}%</span>
-          </div>
-          ${
-              detection.class_name
-                  ? `<div class="detection-key">Class: ${classKey}</div>`
-                  : ""
-          }
-          <div class="detection-bbox">
-            Box: [${Math.round(bbox.x1)}, ${Math.round(bbox.y1)}, ${Math.round(
-                bbox.x2
-            )}, ${Math.round(bbox.y2)}]
-          </div>
-        </div>
-      `;
-        });
-
-        html += "</div>";
-    }
-
-    // Add raw JSON with syntax highlighting
-    html +=
-        '<div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #3a4055;">';
-    html +=
-        '<div style="color: #b0b3b8; font-size: 0.85rem; margin-bottom: 10px; font-family: system-ui;">Raw JSON:</div>';
-    const formatted = syntaxHighlight(JSON.stringify(data, null, 2));
-    html += `<div class="json-display"><pre>${formatted}</pre></div>`;
-    html += "</div>";
-
-    jsonResult.innerHTML = html;
+    els.jsonResult.innerHTML = `<pre>${syntaxHighlight(
+        JSON.stringify(data, null, 2)
+    )}</pre>`;
 }
 
 function syntaxHighlight(json) {
@@ -228,7 +447,7 @@ function syntaxHighlight(json) {
     return json.replace(
         /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
         function (match) {
-            let cls = "json-number";
+            var cls = "json-number";
             if (/^"/.test(match)) {
                 if (/:$/.test(match)) {
                     cls = "json-key";
@@ -243,12 +462,4 @@ function syntaxHighlight(json) {
             return '<span class="' + cls + '">' + match + "</span>";
         }
     );
-}
-
-function showError(message) {
-    errorDiv.style.display = "block";
-    errorDiv.textContent = `Error: ${message}`;
-    setTimeout(() => {
-        errorDiv.style.display = "none";
-    }, 5000);
 }
