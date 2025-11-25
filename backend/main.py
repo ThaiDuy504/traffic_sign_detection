@@ -279,6 +279,116 @@ async def detect_video(
         raise HTTPException(status_code=500, detail=f"Video processing failed: {str(e)}")
 
 
+# Store active video processing sessions
+video_sessions: dict[str, str] = {}  # session_id -> temp_file_path
+
+
+@app.post("/detect/video/upload")
+async def upload_video_for_streaming(
+    file: Annotated[UploadFile, File(description="Video file")],
+):
+    """Upload video and get session ID for streaming processing."""
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+
+    if not file.content_type or not file.content_type.startswith("video/"):
+        raise HTTPException(status_code=400, detail=f"File must be a video. Got: {file.content_type}")
+
+    # Save video to temp file
+    file_extension = Path(file.filename or "video.mp4").suffix or ".mp4"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
+        temp_file.write(await file.read())
+        temp_file_path = temp_file.name
+
+    # Generate session ID
+    import uuid
+    session_id = str(uuid.uuid4())
+    video_sessions[session_id] = temp_file_path
+
+    # Get video info
+    cap = cv2.VideoCapture(temp_file_path)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    cap.release()
+
+    return {
+        "session_id": session_id,
+        "total_frames": total_frames,
+        "fps": fps,
+        "filename": file.filename,
+    }
+
+
+@app.websocket("/ws/video/{session_id}")
+async def websocket_video(websocket: WebSocket, session_id: str):
+    """Stream video processing frame by frame via WebSocket."""
+    await websocket.accept()
+
+    if model is None:
+        await websocket.send_json({"error": "Model not loaded"})
+        await websocket.close()
+        return
+
+    if session_id not in video_sessions:
+        await websocket.send_json({"error": "Invalid session ID"})
+        await websocket.close()
+        return
+
+    temp_file_path = video_sessions.pop(session_id)
+
+    try:
+        query_params = websocket.query_params
+        conf = float(query_params.get("conf", 0.25))
+        iou = float(query_params.get("iou", 0.45))
+
+        cap = cv2.VideoCapture(temp_file_path)
+        if not cap.isOpened():
+            await websocket.send_json({"error": "Could not open video"})
+            await websocket.close()
+            return
+
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+
+        await websocket.send_json({
+            "type": "metadata",
+            "total_frames": total_frames,
+            "fps": fps
+        })
+
+        frame_idx = 0
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            results = model.predict(frame, conf=conf, iou=iou, verbose=False)
+            annotated = results[0].plot()
+
+            _, buffer = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            await websocket.send_bytes(buffer.tobytes())
+            frame_idx += 1
+
+        cap.release()
+        await websocket.send_json({"type": "done", "frames_processed": frame_idx})
+
+    except WebSocketDisconnect:
+        print("Video WS client disconnected")
+    except Exception as e:
+        print(f"Video WS error: {e}")
+        try:
+            await websocket.send_json({"error": str(e)})
+        except:
+            pass
+    finally:
+        if Path(temp_file_path).exists():
+            Path(temp_file_path).unlink(missing_ok=True)
+        try:
+            await websocket.close()
+        except:
+            pass
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()

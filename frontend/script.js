@@ -193,51 +193,135 @@ setupFileUpload(els.videoUploadSection, els.videoInput, (file) => {
         "block";
 });
 
+let videoSocket = null;
+let isVideoProcessing = false;
+
 els.processVideoBtn.addEventListener("click", async () => {
     if (!selectedVideoFile) {
         showError("Please select a video first");
         return;
     }
 
-    setLoading(true, "Processing video... (This may take a while)");
+    if (isVideoProcessing) {
+        // Stop processing
+        if (videoSocket) {
+            videoSocket.close();
+            videoSocket = null;
+        }
+        isVideoProcessing = false;
+        els.processVideoBtn.textContent = "Process Video";
+        setLoading(false);
+        return;
+    }
+
+    setLoading(true, "Uploading video...");
+    els.processVideoBtn.textContent = "Stop Processing";
+    isVideoProcessing = true;
+
+    const conf = els.confSlider.value;
+    const iou = els.iouSlider.value;
 
     try {
+        // Step 1: Upload video via HTTP POST
         const formData = new FormData();
         formData.append("file", selectedVideoFile);
-        const conf = els.confSlider.value;
-        const iou = els.iouSlider.value;
 
-        const response = await fetch(
-            `${API_BASE_URL}/detect/video?conf=${conf}&iou=${iou}`,
-            {
-                method: "POST",
-                body: formData,
-            }
-        );
+        const uploadRes = await fetch(`${API_BASE_URL}/detect/video/upload`, {
+            method: "POST",
+            body: formData,
+        });
 
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.detail || "Video processing failed");
+        if (!uploadRes.ok) {
+            const err = await uploadRes.json();
+            throw new Error(err.detail || "Upload failed");
         }
 
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
+        const { session_id, total_frames, fps } = await uploadRes.json();
 
-        displayVisualResult(`
-            <video controls autoplay loop class="video-display">
-                <source src="${url}" type="video/mp4">
-                Your browser does not support the video tag.
-            </video>
-        `);
+        setLoading(true, "Processing video frames...");
 
-        displayJsonResult({
-            message: "Video processed successfully",
-            filename: selectedVideoFile.name,
-        });
+        // Step 2: Connect WebSocket with session ID
+        videoSocket = new WebSocket(
+            `${WS_BASE_URL}/ws/video/${session_id}?conf=${conf}&iou=${iou}`
+        );
+        videoSocket.binaryType = "arraybuffer";
+
+        let frameCount = 0;
+        let lastUrl = null;
+
+        videoSocket.onmessage = (event) => {
+            if (!isVideoProcessing) return;
+
+            if (typeof event.data === "string") {
+                const msg = JSON.parse(event.data);
+                if (msg.type === "done") {
+                    setLoading(false);
+                    isVideoProcessing = false;
+                    els.processVideoBtn.textContent = "Process Video";
+                    displayJsonResult({
+                        message: "Video processed successfully",
+                        filename: selectedVideoFile.name,
+                        frames_processed: msg.frames_processed,
+                    });
+                } else if (msg.error) {
+                    throw new Error(msg.error);
+                }
+            } else {
+                // Binary frame data
+                frameCount++;
+
+                if (lastUrl) URL.revokeObjectURL(lastUrl);
+
+                const blob = new Blob([event.data], { type: "image/jpeg" });
+                const url = URL.createObjectURL(blob);
+                lastUrl = url;
+
+                let img = els.visualResult.querySelector("img.video-stream");
+                if (!img) {
+                    els.visualResult.innerHTML = `<img class="image-display video-stream" src="${url}" />`;
+                } else {
+                    img.src = url;
+                }
+
+                const progress =
+                    total_frames > 0
+                        ? Math.round((frameCount / total_frames) * 100)
+                        : 0;
+                setLoading(
+                    true,
+                    `Processing: ${frameCount}/${total_frames} frames (${progress}%)`
+                );
+
+                displayJsonResult({
+                    status: "Processing",
+                    total_frames,
+                    fps,
+                    frames_processed: frameCount,
+                    progress: `${progress}%`,
+                });
+            }
+        };
+
+        videoSocket.onerror = () => {
+            showError("Video processing connection error");
+            cleanup();
+        };
+
+        videoSocket.onclose = () => {
+            if (isVideoProcessing) cleanup();
+        };
+
+        function cleanup() {
+            setLoading(false);
+            isVideoProcessing = false;
+            els.processVideoBtn.textContent = "Process Video";
+            videoSocket = null;
+        }
     } catch (err) {
         showError(err.message);
-    } finally {
         setLoading(false);
+        isVideoProcessing = false;
+        els.processVideoBtn.textContent = "Process Video";
     }
 });
 
