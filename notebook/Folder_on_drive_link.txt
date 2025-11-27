@@ -1,0 +1,2 @@
+dataset : https://drive.google.com/drive/folders/1NvrEVtNC1Pec6YOKYj91hbjjGNMqpRPH?usp=drive_link
+folder_lưu_checkpoint: https://drive.google.com/drive/folders/1Gg8BjzGed2ilY78k9bersT6uOFFvzX9-?usp=drive_link
