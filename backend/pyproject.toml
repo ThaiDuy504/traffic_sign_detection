@@ -6,5 +6,21 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.120.4",
+    "opencv-python-headless",
+    "torch",
     "ultralytics>=8.3.223",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+# 2. Ép buộc uv tải torch từ kho CPU thay vì kho mặc định (PyPI)
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu" }
+]
+torchvision = [
+  { index = "pytorch-cpu" }
 ]

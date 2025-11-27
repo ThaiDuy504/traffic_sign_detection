@@ -7,12 +7,12 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
 # Copy only dependency files first for better layer caching
-COPY backend/pyproject.toml backend/uv.lock ./backend/
+COPY backend/pyproject.toml ./backend/
 
 # Install dependencies only (no project package to install)
 WORKDIR /app/backend
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-project
+    uv sync  --no-dev --no-install-project
 
 # Copy application code
 WORKDIR /app

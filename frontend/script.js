@@ -214,7 +214,7 @@ els.processVideoBtn.addEventListener("click", async () => {
         return;
     }
 
-    setLoading(true, "Uploading video...");
+    setLoading(true, "Uploading video...", { dimVisual: false });
     els.processVideoBtn.textContent = "Stop Processing";
     isVideoProcessing = true;
 
@@ -238,7 +238,7 @@ els.processVideoBtn.addEventListener("click", async () => {
 
         const { session_id, total_frames, fps } = await uploadRes.json();
 
-        setLoading(true, "Processing video frames...");
+        setLoading(true, "Processing video frames...", { dimVisual: false });
 
         // Step 2: Connect WebSocket with session ID
         videoSocket = new WebSocket(
@@ -289,7 +289,8 @@ els.processVideoBtn.addEventListener("click", async () => {
                         : 0;
                 setLoading(
                     true,
-                    `Processing: ${frameCount}/${total_frames} frames (${progress}%)`
+                    `Processing: ${frameCount}/${total_frames} frames (${progress}%)`,
+                    { dimVisual: false }
                 );
 
                 displayJsonResult({
@@ -495,12 +496,13 @@ function hideUploadText(section) {
         .forEach((el) => (el.style.display = "none"));
 }
 
-function setLoading(isLoading, text = "Processing...") {
+function setLoading(isLoading, text = "Processing...", options = {}) {
+    const { dimVisual = true } = options;
     if (isLoading) {
         els.loading.style.display = "flex";
         els.loading.querySelector("p").textContent = text;
         els.error.style.display = "none";
-        els.visualResult.style.opacity = "0.5";
+        els.visualResult.style.opacity = dimVisual ? "0.5" : "1";
     } else {
         els.loading.style.display = "none";
         els.visualResult.style.opacity = "1";
