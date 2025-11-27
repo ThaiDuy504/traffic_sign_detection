@@ -34,7 +34,7 @@ Hệ thống phát hiện biển báo giao thông tự động sử dụng mô h
 -   💪 Xử lý ảnh tạm thời an toàn với tự động cleanup
 -   🎬 **Xử lý video**: Upload video và nhận lại video đã được đánh dấu các biển báo
 -   📷 **Camera real-time**: Phát hiện biển báo qua camera trực tiếp với WebSocket
--   🌐 **WebSocket streaming**: Xử lý video frame-by-frame với tiến trình real-time
+-   🌐 **WebSocket streaming**: Xử lý video frame-by-frame với theo dõi tiến độ real-time
 -   🗺️ **Mô tả tiếng Việt**: Hiển thị tên biển báo bằng tiếng Việt qua file class mapping
 
 ## 📁 Cấu Trúc Dự Án
@@ -352,7 +352,7 @@ ws://localhost:8000/ws/video/{session_id}?conf=0.5&iou=0.45
 
 **Messages:**
 
--   **Server → Client (JSON)**: Metadata ban đầu `{"type": "metadata", "total_frames": 300, "fps": 30}`
+-   **Server → Client (JSON)**: Dữ liệu meta ban đầu `{"type": "metadata", "total_frames": 300, "fps": 30}`
 -   **Server → Client (Binary)**: JPEG bytes của từng frame đã được annotate
 -   **Server → Client (JSON)**: Hoàn thành `{"type": "done", "frames_processed": 300}`
 
