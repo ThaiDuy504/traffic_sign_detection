@@ -4,16 +4,16 @@ Dự án phát hiện biển báo giao thông sử dụng YOLOv8 với FastAPI b
 
 ## 📋 Mục Lục
 
--   [Giới Thiệu](#giới-thiệu)
--   [Tính Năng](#tính-năng)
--   [Cấu Trúc Dự Án](#cấu-trúc-dự-án)
--   [Yêu Cầu Hệ Thống](#yêu-cầu-hệ-thống)
--   [Cài Đặt](#cài-đặt)
--   [Sử Dụng](#sử-dụng)
--   [Docker Deployment](#docker-deployment)
--   [API Documentation](#api-documentation)
--   [Huấn Luyện Model](#huấn-luyện-model)
--   [Công Nghệ Sử Dụng](#công-nghệ-sử-dụng)
+-   [Giới Thiệu](#-giới-thiệu)
+-   [Tính Năng](#-tính-năng)
+-   [Cấu Trúc Dự Án](#-cấu-trúc-dự-án)
+-   [Yêu Cầu Hệ Thống](#-yêu-cầu-hệ-thống)
+-   [Cài Đặt](#-cài-đặt)
+-   [Sử Dụng](#-sử-dụng)
+-   [Docker Deployment](#-docker-deployment)
+-   [API Documentation](#-api-documentation)
+-   [Huấn Luyện Model](#-huấn-luyện-model)
+-   [Công Nghệ Sử Dụng](#-công-nghệ-sử-dụng)
 
 ## 🎯 Giới Thiệu
 
