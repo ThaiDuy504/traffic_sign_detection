@@ -1,6 +1,18 @@
 const API_BASE_URL = "http://localhost:8000";
 const WS_BASE_URL = "ws://localhost:8000";
 
+// Theme toggle
+const themeToggle = document.getElementById("themeToggle");
+const savedTheme = localStorage.getItem("theme") || "dark";
+document.documentElement.setAttribute("data-theme", savedTheme);
+
+themeToggle.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme");
+    const next = current === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("theme", next);
+});
+
 // State
 let currentMode = "image";
 let selectedImageFile = null;
