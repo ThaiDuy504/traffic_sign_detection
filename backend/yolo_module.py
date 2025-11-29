@@ -1,44 +1,47 @@
-from ultralytics import YOLO  # type: ignore
+import io
+import os
+import tempfile
 from pathlib import Path
+
+import cv2
 import numpy as np
 from PIL import Image
-import io
-import cv2
-import tempfile
-import os
+from ultralytics import YOLO  # type: ignore
 
 
 def load_class_mapping(mapping_path: str = "class_mapping.txt") -> dict[str, str]:
     """
     Load class mapping from a text file.
-    
+
     Args:
         mapping_path: Path to the class mapping file (default: "class_mapping.txt")
-    
+
     Returns:
         Dictionary mapping class keys to Vietnamese descriptions
         Example: {"W.224": "Đường người đi bộ cắt ngang", ...}
     """
     class_mapping: dict[str, str] = {}
-    
+
     try:
-        with open(mapping_path, 'r', encoding='utf-8') as f:
+        with open(mapping_path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
-                if not line or '=' not in line:
+                if not line or "=" not in line:
                     continue
-                
+
                 # Split by '=' and clean up whitespace
-                parts = line.split('=', 1)
+                parts = line.split("=", 1)
                 if len(parts) == 2:
                     key = parts[0].strip()
                     value = parts[1].strip()
                     class_mapping[key] = value
     except FileNotFoundError:
-        print(f"Warning: Class mapping file '{mapping_path}' not found. Using class keys only.")
+        print(
+            f"Warning: Class mapping file '{mapping_path}' not found. Using class keys only."
+        )
     except Exception as e:
         print(f"Warning: Error loading class mapping: {e}. Using class keys only.")
-    
+
     return class_mapping
 
 
@@ -87,7 +90,7 @@ def detect_with_annotated_image(
     """
     # Run prediction on the source (typically a temporary file path from main.py)
     results = model.predict(  # type: ignore
-        source=source, save=False, conf=conf, iou=iou, verbose=False
+        source=source, save=False, conf=conf, iou=iou, verbose=False, imgsz=1280
     )
 
     # Process first result (single image)
@@ -131,7 +134,7 @@ def detect_with_annotated_image(
                     "y2": bbox[3],
                 },
             }
-            
+
             # Add Vietnamese class name if mapping is provided
             if class_mapping and class_key in class_mapping:
                 detection["class_name"] = class_mapping[class_key]
@@ -149,13 +152,13 @@ def process_video(
 ) -> str:
     """
     Process a video file frame by frame, detecting objects and saving the annotated video.
-    
+
     Args:
         model: Pre-loaded YOLO model instance
         source_path: Path to the input video file
         conf: Confidence threshold
         iou: NMS IoU threshold
-        
+
     Returns:
         Path to the processed video file
     """
@@ -167,19 +170,19 @@ def process_video(
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = int(cap.get(cv2.CAP_PROP_FPS))
-    
+
     if fps <= 0:
         fps = 30  # Fallback FPS
-    
+
     # Create output temporary file
-    output_fd, output_path = tempfile.mkstemp(suffix='.mp4')
+    output_fd, output_path = tempfile.mkstemp(suffix=".mp4")
     os.close(output_fd)
-    
+
     # Initialize video writer
     # 'mp4v' is widely supported
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v') # type: ignore
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # type: ignore
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-    
+
     if not out.isOpened():
         cap.release()
         raise ValueError("Could not open video writer")
@@ -188,18 +191,18 @@ def process_video(
         ret, frame = cap.read()
         if not ret:
             break
-            
+
         # Run detection on the frame
-        results = model.predict(frame, conf=conf, iou=iou, verbose=False)
+        results = model.predict(frame, conf=conf, iou=iou, verbose=False, imgsz=1280)
         result = results[0]
-        
+
         # Plot results on frame (returns BGR numpy array)
         annotated_frame = result.plot()
-        
+
         # Write frame
         out.write(annotated_frame)
-        
+
     cap.release()
     out.release()
-    
+
     return output_path
