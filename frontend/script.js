@@ -5,6 +5,9 @@
 const API_BASE_URL = "http://localhost:8000";
 const WS_BASE_URL = "ws://localhost:8000";
 
+// Video processing settings
+const VIDEO_FRAME_SKIP = 2; // Process every Nth frame (1 = all, 2 = half, 3 = third)
+
 // =============================================================================
 // State
 // =============================================================================
@@ -386,30 +389,34 @@ async function startVideoProcessing() {
             throw new Error(err.detail || "Upload failed");
         }
 
-        const { session_id, total_frames, fps } = await uploadRes.json();
+        const { session_id } = await uploadRes.json();
 
         setLoading(true, "Processing video frames...", { dimVisual: false });
 
-        // Connect WebSocket
+        // Connect WebSocket with frame_skip for faster processing
         state.videoSocket = new WebSocket(
-            `${WS_BASE_URL}/ws/video/${session_id}?conf=${conf}&iou=${iou}`
+            `${WS_BASE_URL}/ws/video/${session_id}?conf=${conf}&iou=${iou}&frame_skip=${VIDEO_FRAME_SKIP}`
         );
         state.videoSocket.binaryType = "arraybuffer";
 
         let frameCount = 0;
         let lastUrl = null;
+        let metadata = null;
 
         state.videoSocket.onmessage = (event) => {
             if (!state.isVideoProcessing) return;
 
             if (typeof event.data === "string") {
                 const msg = JSON.parse(event.data);
-                if (msg.type === "done") {
+                if (msg.type === "metadata") {
+                    metadata = msg;
+                } else if (msg.type === "done") {
                     stopVideoProcessing();
                     displayJsonResult({
                         message: "Video processed successfully",
                         filename: state.selectedVideoFile.name,
                         frames_processed: msg.frames_processed,
+                        frame_skip: metadata?.frame_skip || 1,
                     });
                 } else if (msg.error) {
                     showError(msg.error);
@@ -430,13 +437,14 @@ async function startVideoProcessing() {
                     img.src = url;
                 }
 
+                const totalFrames = metadata?.total_frames || 0;
                 const progress =
-                    total_frames > 0
-                        ? Math.round((frameCount / total_frames) * 100)
+                    totalFrames > 0
+                        ? Math.round((frameCount / totalFrames) * 100)
                         : 0;
                 setLoading(
                     true,
-                    `Processing: ${frameCount}/${total_frames} frames (${progress}%)`,
+                    `Processing: ${frameCount}/${totalFrames} frames (${progress}%)`,
                     {
                         dimVisual: false,
                     }
@@ -444,8 +452,10 @@ async function startVideoProcessing() {
 
                 displayJsonResult({
                     status: "Processing",
-                    total_frames,
-                    fps,
+                    total_frames: totalFrames,
+                    original_frames: metadata?.original_frames,
+                    fps: metadata?.fps,
+                    frame_skip: metadata?.frame_skip,
                     frames_processed: frameCount,
                     progress: `${progress}%`,
                 });

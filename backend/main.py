@@ -341,8 +341,10 @@ async def websocket_video(websocket: WebSocket, session_id: str):
 
     try:
         query_params = websocket.query_params
-        conf = float(query_params.get("conf", 0.25))
+        conf = float(query_params.get("conf", 0.5))
         iou = float(query_params.get("iou", 0.45))
+        # Frame skip: process every Nth frame (1 = all frames, 2 = every other, etc.)
+        frame_skip = max(1, int(query_params.get("frame_skip", 1)))
 
         cap = cv2.VideoCapture(temp_file_path)
         if not cap.isOpened():
@@ -352,28 +354,37 @@ async def websocket_video(websocket: WebSocket, session_id: str):
 
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        # Effective frames after skipping
+        effective_frames = (total_frames + frame_skip - 1) // frame_skip
 
         await websocket.send_json({
             "type": "metadata",
-            "total_frames": total_frames,
-            "fps": fps
+            "total_frames": effective_frames,
+            "original_frames": total_frames,
+            "fps": fps,
+            "frame_skip": frame_skip
         })
 
         frame_idx = 0
+        processed_count = 0
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
 
-            results = model.predict(frame, conf=conf, iou=iou, verbose=False)
-            annotated = results[0].plot()
+            # Skip frames based on frame_skip parameter
+            if frame_idx % frame_skip == 0:
+                results = model.predict(frame, conf=conf, iou=iou, verbose=False, imgsz=INFERENCE_IMGSZ)
+                annotated = results[0].plot()
 
-            _, buffer = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            await websocket.send_bytes(buffer.tobytes())
+                _, buffer = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                await websocket.send_bytes(buffer.tobytes())
+                processed_count += 1
+
             frame_idx += 1
 
         cap.release()
-        await websocket.send_json({"type": "done", "frames_processed": frame_idx})
+        await websocket.send_json({"type": "done", "frames_processed": processed_count})
 
     except WebSocketDisconnect:
         print("Video WS client disconnected")
@@ -403,7 +414,7 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         # Extract query parameters manually since FastAPI doesn't inject them for WebSockets
         query_params = websocket.query_params
-        conf = float(query_params.get("conf", 0.25))
+        conf = float(query_params.get("conf", 0.5))
         iou = float(query_params.get("iou", 0.45))
         
         while True:
