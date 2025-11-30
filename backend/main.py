@@ -10,7 +10,7 @@ import os
 import cv2
 import numpy as np
 from pathlib import Path
-from yolo_module import load_model, detect_with_annotated_image, load_class_mapping, process_video
+from yolo_module import load_model, detect_with_annotated_image, load_class_mapping, process_video, draw_annotations
 
 # Global model variable
 model = None
@@ -256,7 +256,7 @@ async def detect_video(
 
         # Process video
         processed_path = process_video(
-            model=model, source_path=temp_file_path, conf=conf, iou=iou
+            model=model, source_path=temp_file_path, conf=conf, iou=iou, class_mapping=class_mapping
         )
 
         # Clean up input file immediately
@@ -375,7 +375,11 @@ async def websocket_video(websocket: WebSocket, session_id: str):
             # Skip frames based on frame_skip parameter
             if frame_idx % frame_skip == 0:
                 results = model.predict(frame, conf=conf, iou=iou, verbose=False, imgsz=INFERENCE_IMGSZ)
-                annotated = results[0].plot()
+                result = results[0]
+                
+                # Use custom annotation with Vietnamese names
+                annotated_rgb = draw_annotations(frame, result.boxes, result.names, class_mapping)
+                annotated = cv2.cvtColor(annotated_rgb, cv2.COLOR_RGB2BGR)
 
                 _, buffer = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])
                 await websocket.send_bytes(buffer.tobytes())
