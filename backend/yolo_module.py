@@ -61,10 +61,11 @@ def load_model(model_path: str = "model/best.pt") -> YOLO:
 def detect_with_annotated_image(
     model: YOLO,
     source: str | Path | np.ndarray,
-    conf: float = 0.25,
+    conf: float = 0.5,
     iou: float = 0.45,
     image_format: str = "JPEG",
     class_mapping: dict[str, str] | None = None,
+    imgsz: int = 1280,
 ) -> tuple[list[dict[str, int | str | float | dict[str, float]]], bytes]:
     """
     Perform detection and return both results and annotated image for frontend rendering.
@@ -77,6 +78,7 @@ def detect_with_annotated_image(
         iou: NMS IoU threshold (default: 0.45)
         image_format: Output image format for frontend (JPEG, PNG, etc.)
         class_mapping: Optional dictionary mapping class keys to Vietnamese descriptions
+        imgsz: Inference image size (default: 1280, lower = faster)
 
     Returns:
         Tuple of (detection_results, annotated_image_bytes)
@@ -90,7 +92,7 @@ def detect_with_annotated_image(
     """
     # Run prediction on the source (typically a temporary file path from main.py)
     results = model.predict(  # type: ignore
-        source=source, save=False, conf=conf, iou=iou, verbose=False, imgsz=1280
+        source=source, save=False, conf=conf, iou=iou, verbose=False, imgsz=imgsz
     )
 
     # Process first result (single image)
@@ -147,7 +149,7 @@ def detect_with_annotated_image(
 def process_video(
     model: YOLO,
     source_path: str,
-    conf: float = 0.25,
+    conf: float = 0.5,
     iou: float = 0.45,
 ) -> str:
     """

@@ -16,6 +16,9 @@ from yolo_module import load_model, detect_with_annotated_image, load_class_mapp
 model = None
 class_mapping = None
 
+# Inference settings
+INFERENCE_IMGSZ = 640  # Smaller = faster, larger = more accurate (default: 640)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -89,7 +92,7 @@ async def detect_traffic_signs(
     file: Annotated[
         UploadFile, File(description="Image file for traffic sign detection")
     ],
-    conf: float = 0.25,
+    conf: float = 0.5,
     iou: float = 0.45,
 ):
     """
@@ -156,7 +159,7 @@ async def detect_with_image(
     file: Annotated[
         UploadFile, File(description="Image file for traffic sign detection")
     ],
-    conf: float = 0.25,
+    conf: float = 0.5,
     iou: float = 0.45,
 ):
     """
@@ -227,7 +230,7 @@ async def detect_video(
         UploadFile, File(description="Video file for traffic sign detection")
     ],
     background_tasks: BackgroundTasks,
-    conf: float = 0.25,
+    conf: float = 0.5,
     iou: float = 0.45,
 ):
     """
@@ -421,7 +424,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 conf=conf, 
                 iou=iou, 
                 image_format="JPEG",
-                class_mapping=class_mapping
+                class_mapping=class_mapping,
+                imgsz=INFERENCE_IMGSZ,
             )
             
             await websocket.send_bytes(annotated_bytes)
