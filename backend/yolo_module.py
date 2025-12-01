@@ -58,6 +58,160 @@ def load_model(model_path: str = "model/best.pt") -> YOLO:
     return YOLO(model_path)
 
 
+def get_sign_color_scheme(class_key: str) -> tuple[tuple[int, int, int], tuple[int, int, int], tuple[int, int, int]]:
+    """
+    Get color scheme for traffic sign based on its type.
+    Returns (box_color, text_bg_color, text_color) in RGB format.
+    
+    Colors are carefully selected to be easy on the eyes and provide good contrast.
+    """
+    # Prohibitory signs (P.*) - Red theme (softer red)
+    if class_key.startswith('P.'):
+        return (
+            (220, 50, 50),    # Soft red box
+            (180, 30, 30),    # Dark red background
+            (255, 255, 255)   # White text
+        )
+    
+    # Warning signs (W.*) - Yellow/Orange theme
+    elif class_key.startswith('W.'):
+        return (
+            (255, 165, 0),    # Orange box
+            (204, 102, 0),    # Dark orange background
+            (255, 255, 255)   # White text
+        )
+    
+    # Regulatory/Mandatory signs (R.*) - Blue theme
+    elif class_key.startswith('R.'):
+        return (
+            (70, 130, 220),   # Soft blue box
+            (30, 80, 150),    # Dark blue background
+            (255, 255, 255)   # White text
+        )
+    
+    # Information/Guide signs (I.*) - Green theme
+    elif class_key.startswith('I.'):
+        return (
+            (60, 180, 75),    # Soft green box
+            (30, 120, 50),    # Dark green background
+            (255, 255, 255)   # White text
+        )
+    
+    # Speed limit signs (S.*) - Purple theme
+    elif class_key.startswith('S.'):
+        return (
+            (147, 112, 219),  # Medium purple box
+            (85, 60, 140),    # Dark purple background
+            (255, 255, 255)   # White text
+        )
+    
+    # Bus signs (B.*) - Teal theme
+    elif class_key.startswith('B.'):
+        return (
+            (64, 224, 208),   # Turquoise box
+            (32, 140, 130),   # Dark teal background
+            (255, 255, 255)   # White text
+        )
+    
+    # Camera - Pink/Magenta theme
+    elif 'Camera' in class_key or 'camera' in class_key:
+        return (
+            (255, 105, 180),  # Hot pink box
+            (200, 60, 130),   # Dark pink background
+            (255, 255, 255)   # White text
+        )
+    
+    # Default - Gray theme for unknown types
+    else:
+        return (
+            (128, 128, 128),  # Gray box
+            (80, 80, 80),     # Dark gray background
+            (255, 255, 255)   # White text
+        )
+
+
+def check_overlap(rect1: tuple[float, float, float, float], 
+                  rect2: tuple[float, float, float, float]) -> bool:
+    """
+    Check if two rectangles overlap.
+    rect format: (x1, y1, x2, y2)
+    """
+    x1_1, y1_1, x2_1, y2_1 = rect1
+    x1_2, y1_2, x2_2, y2_2 = rect2
+    
+    # No overlap if one is to the left/right/above/below the other
+    if x2_1 < x1_2 or x2_2 < x1_1:
+        return False
+    if y2_1 < y1_2 or y2_2 < y1_1:
+        return False
+    
+    return True
+
+
+def find_non_overlapping_position(
+    box_coords: tuple[float, float, float, float],
+    text_width: float,
+    text_height: float,
+    img_width: int,
+    img_height: int,
+    occupied_regions: list[tuple[float, float, float, float]],
+    padding: int = 5
+) -> tuple[float, float]:
+    """
+    Find optimal position for label that doesn't overlap with existing labels.
+    Returns (text_x, text_y)
+    """
+    x1, y1, x2, y2 = box_coords
+    text_w = text_width + padding * 2
+    text_h = text_height + padding * 2
+    
+    # List of candidate positions (in priority order)
+    candidates = [
+        # Above box
+        (x1, y1 - text_h - 5),
+        # Below box
+        (x1, y2 + 5),
+        # Right of box
+        (x2 + 5, y1),
+        # Left of box
+        (x1 - text_w - 5, y1),
+        # Top-left inside box
+        (x1 + 5, y1 + 5),
+        # Top-right inside box
+        (x2 - text_w - 5, y1 + 5),
+        # Bottom-left inside box
+        (x1 + 5, y2 - text_h - 5),
+        # Bottom-right inside box
+        (x2 - text_w - 5, y2 - text_h - 5),
+        # Center inside box
+        ((x1 + x2 - text_w) / 2, (y1 + y2 - text_h) / 2),
+    ]
+    
+    for text_x, text_y in candidates:
+        # Ensure within image bounds
+        text_x = max(0, min(text_x, img_width - text_w))
+        text_y = max(0, min(text_y, img_height - text_h))
+        
+        # Create rectangle for this position
+        candidate_rect = (text_x, text_y, text_x + text_w, text_y + text_h)
+        
+        # Check if it overlaps with any existing label
+        has_overlap = False
+        for occupied in occupied_regions:
+            if check_overlap(candidate_rect, occupied):
+                has_overlap = True
+                break
+        
+        if not has_overlap:
+            return text_x, text_y
+    
+    # If all positions overlap, return the first candidate (above box) as fallback
+    text_x, text_y = candidates[0]
+    text_x = max(0, min(text_x, img_width - text_w))
+    text_y = max(0, min(text_y, img_height - text_h))
+    return text_x, text_y
+
+
 def draw_annotations(
     image: np.ndarray,
     boxes,
@@ -66,6 +220,8 @@ def draw_annotations(
 ) -> np.ndarray:
     """
     Draw bounding boxes and labels on image with custom styling for better visibility.
+    Each sign type gets a unique color scheme for easy identification.
+    Labels are positioned to avoid overlapping with each other.
 
     Args:
         image: Input image as numpy array (BGR format)
@@ -93,6 +249,12 @@ def draw_annotations(
             # Fallback to default font if custom font not available
             font = ImageFont.load_default()
 
+    # Get image dimensions
+    img_width, img_height = pil_img.size
+    
+    # Track occupied regions to prevent label overlap
+    occupied_regions: list[tuple[float, float, float, float]] = []
+
     if boxes is not None and len(boxes) > 0:
         for box in boxes:
             # Get box coordinates
@@ -110,17 +272,14 @@ def draw_annotations(
             # Create label with confidence
             label = f"{display_name} {conf:.2f}"
 
-            # Define colors for better visibility
-            # Using bright colors on dark background
-            box_color = (0, 255, 0)  # Bright green for box
-            text_bg_color = (0, 128, 0)  # Dark green background for text
-            text_color = (255, 255, 255)  # White text
+            # Get color scheme based on sign type
+            box_color, text_bg_color, text_color = get_sign_color_scheme(class_key)
 
             # Draw bounding box with thicker line
             line_width = 3
             draw.rectangle([x1, y1, x2, y2], outline=box_color, width=line_width)
 
-            # Calculate text size and position
+            # Calculate text size
             try:
                 bbox = draw.textbbox((0, 0), label, font=font)
                 text_width = bbox[2] - bbox[0]
@@ -129,23 +288,36 @@ def draw_annotations(
                 # Fallback for older PIL versions
                 text_width, text_height = draw.textsize(label, font=font)
 
-            # Position text above the box, or below if too close to top
-            text_y = y1 - text_height - 5 if y1 > text_height + 10 else y2 + 5
+            padding = 5
+            
+            # Find non-overlapping position for this label
+            text_x, text_y = find_non_overlapping_position(
+                (x1, y1, x2, y2),
+                text_width,
+                text_height,
+                img_width,
+                img_height,
+                occupied_regions,
+                padding
+            )
+            
+            # Add this label's region to occupied list
+            text_rect = (
+                text_x,
+                text_y,
+                text_x + text_width + padding * 2,
+                text_y + text_height + padding * 2
+            )
+            occupied_regions.append(text_rect)
 
             # Draw text background rectangle for better readability
-            padding = 5
             draw.rectangle(
-                [
-                    x1,
-                    text_y - padding,
-                    x1 + text_width + padding * 2,
-                    text_y + text_height + padding,
-                ],
+                [text_rect[0], text_rect[1], text_rect[2], text_rect[3]],
                 fill=text_bg_color,
             )
 
             # Draw text
-            draw.text((x1 + padding, text_y), label, fill=text_color, font=font)
+            draw.text((text_x + padding, text_y + padding), label, fill=text_color, font=font)
 
     return np.array(pil_img)
 
